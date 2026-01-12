@@ -2,11 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useForm } from "@tanstack/react-form";
-import { createRecurringFormSchema } from "@subtrack/shared/schemas/recurring";
-import type {
-  RecurringFrequency,
-  RecurringType,
-} from "@subtrack/shared/schemas/recurring";
+import { createOneTimeFormSchema } from "@subtrack/shared/schemas/one-time";
 import {
   Dialog,
   DialogContent,
@@ -27,33 +23,32 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  createRecurring,
-  updateRecurring,
-  deleteRecurring,
-} from "@/lib/api/recurring";
-import type { RecurringTransaction } from "@/components/recurring/recurring-table";
+  createOneTime,
+  updateOneTime,
+  deleteOneTime,
+} from "@/lib/api/one-time";
+import type { OneTimeTransaction } from "@/components/one-time/one-time-table";
 import { toast } from "sonner";
 import { Loader2, Trash2 } from "lucide-react";
 
-type AddEditRecurringModalProps = {
+type AddEditOneTimeModalProps = {
   open: boolean;
   onOpenChangeAction: (open: boolean) => void;
-  transaction?: RecurringTransaction | null;
+  transaction?: OneTimeTransaction | null;
   onSuccessAction: () => void;
 };
 
 const categories = [
-  "Housing",
-  "Utilities",
-  "Transportation",
-  "Insurance",
-  "Healthcare",
-  "Entertainment",
-  "Subscriptions",
   "Food & Dining",
+  "Shopping",
+  "Transportation",
+  "Entertainment",
+  "Healthcare",
+  "Travel",
+  "Gifts",
+  "Home & Garden",
   "Personal",
   "Education",
-  "Fitness",
   "Other",
 ];
 
@@ -63,12 +58,12 @@ const formatDateForInput = (date: Date | string | undefined): string => {
   return d.toISOString().split("T")[0];
 };
 
-export function AddEditRecurringModal({
+export function AddEditOneTimeModal({
   open,
   onOpenChangeAction,
   transaction,
   onSuccessAction,
-}: AddEditRecurringModalProps) {
+}: AddEditOneTimeModalProps) {
   const isEditing = !!transaction;
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -77,27 +72,25 @@ export function AddEditRecurringModal({
     defaultValues: {
       name: transaction?.name || "",
       amount: transaction?.amount || 0,
-      type: (transaction?.type || "SUBSCRIPTION") as RecurringType,
       category: transaction?.category || "",
-      frequency: (transaction?.frequency || "MONTHLY") as RecurringFrequency,
-      startDate: formatDateForInput(transaction?.startDate),
+      date: formatDateForInput(transaction?.date),
     },
     validators: {
-      onChange: createRecurringFormSchema,
+      onChange: createOneTimeFormSchema,
     },
     onSubmit: async ({ value }) => {
       try {
         const payload = {
           ...value,
-          startDate: new Date(value.startDate),
+          date: new Date(value.date),
         };
 
         if (isEditing && transaction) {
-          await updateRecurring(transaction.id, payload);
-          toast.success("Recurring updated");
+          await updateOneTime(transaction.id, payload);
+          toast.success("Expense updated");
         } else {
-          await createRecurring(payload);
-          toast.success("Recurring added");
+          await createOneTime(payload);
+          toast.success("Expense added");
         }
         onSuccessAction();
         onOpenChangeAction(false);
@@ -115,19 +108,8 @@ export function AddEditRecurringModal({
       form.reset();
       form.setFieldValue("name", transaction?.name || "");
       form.setFieldValue("amount", transaction?.amount || 0);
-      form.setFieldValue(
-        "type",
-        (transaction?.type || "SUBSCRIPTION") as RecurringType,
-      );
       form.setFieldValue("category", transaction?.category || "");
-      form.setFieldValue(
-        "frequency",
-        (transaction?.frequency || "MONTHLY") as RecurringFrequency,
-      );
-      form.setFieldValue(
-        "startDate",
-        formatDateForInput(transaction?.startDate),
-      );
+      form.setFieldValue("date", formatDateForInput(transaction?.date));
       setShowDeleteConfirm(false);
     } else {
       form.reset();
@@ -139,8 +121,8 @@ export function AddEditRecurringModal({
     setIsDeleting(true);
 
     try {
-      await deleteRecurring(transaction.id);
-      toast.success("Recurring deleted");
+      await deleteOneTime(transaction.id);
+      toast.success("Expense deleted");
       onSuccessAction();
       onOpenChangeAction(false);
     } catch (error) {
@@ -155,12 +137,12 @@ export function AddEditRecurringModal({
       <DialogContent className="sm:max-w-106.25">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Edit Recurring" : "Add Recurring"}
+            {isEditing ? "Edit Expense" : "Add Expense"}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Update the details of this recurring expense."
-              : "Add a new recurring bill or subscription."}
+              ? "Update the details of this expense."
+              : "Add a new one-time expense."}
           </DialogDescription>
         </DialogHeader>
 
@@ -183,77 +165,13 @@ export function AddEditRecurringModal({
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder="Netflix, Electricity, etc."
+                    placeholder="Groceries, Coffee, etc."
                   />
                   {isInvalid && <FieldError errors={field.state.meta.errors} />}
                 </Field>
               );
             }}
           </form.Field>
-
-          <div className="grid grid-cols-2 gap-4">
-            <form.Field name="type">
-              {(field) => {
-                const isInvalid =
-                  field.state.meta.isTouched && !field.state.meta.isValid;
-                return (
-                  <Field data-invalid={isInvalid} className="space-y-2">
-                    <Label htmlFor={field.name}>Type</Label>
-                    <Select
-                      value={field.state.value}
-                      onValueChange={(value: RecurringType) =>
-                        field.handleChange(value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BILL">Bill</SelectItem>
-                        <SelectItem value="SUBSCRIPTION">
-                          Subscription
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {isInvalid && (
-                      <FieldError errors={field.state.meta.errors} />
-                    )}
-                  </Field>
-                );
-              }}
-            </form.Field>
-
-            <form.Field name="frequency">
-              {(field) => {
-                const isInvalid =
-                  field.state.meta.isTouched && !field.state.meta.isValid;
-                return (
-                  <Field data-invalid={isInvalid} className="space-y-2">
-                    <Label htmlFor={field.name}>Frequency</Label>
-                    <Select
-                      value={field.state.value}
-                      onValueChange={(value: RecurringFrequency) =>
-                        field.handleChange(value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="DAILY">Daily</SelectItem>
-                        <SelectItem value="WEEKLY">Weekly</SelectItem>
-                        <SelectItem value="MONTHLY">Monthly</SelectItem>
-                        <SelectItem value="YEARLY">Yearly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {isInvalid && (
-                      <FieldError errors={field.state.meta.errors} />
-                    )}
-                  </Field>
-                );
-              }}
-            </form.Field>
-          </div>
 
           <form.Field name="category">
             {(field) => {
@@ -317,26 +235,24 @@ export function AddEditRecurringModal({
               }}
             </form.Field>
 
-            <form.Field name="startDate">
+            <form.Field name="date">
               {(field) => {
                 const isInvalid =
                   field.state.meta.isTouched && !field.state.meta.isValid;
                 return (
                   <Field data-invalid={isInvalid} className="space-y-2">
-                    <Label htmlFor={field.name}>Start Date</Label>
+                    <Label htmlFor={field.name}>Date</Label>
                     <Input
                       id={field.name}
                       type="date"
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => {
-                        // Handle empty value by setting to today's date
                         const value =
                           e.target.value ||
                           new Date().toISOString().split("T")[0];
                         field.handleChange(value);
                       }}
-                      max={new Date().toISOString().split("T")[0]}
                     />
                     {isInvalid && (
                       <FieldError errors={field.state.meta.errors} />
